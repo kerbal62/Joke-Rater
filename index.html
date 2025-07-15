@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Joke Rater Ultra Full</title>
+  <title>Joke Rater</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -83,8 +83,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>🤖 Joke Rater Ultra Full (Siêu Phức Tạp)</h1>
-    <textarea id="jokeInput" placeholder="Nhập joke có punchline ngắn gọn..."></textarea>
+    <h1> Joke Rater</h1>
+    <textarea id="jokeInput" placeholder="Enter short joke..."></textarea>
     <button id="rateBtn">Chấm Siêu Phức Tạp</button>
     <div id="result"></div>
   </div>
@@ -144,7 +144,7 @@
       const emb = await model.embed([setup,punch]);
       const arr = await emb.array();
       if (!arr || arr.length < 2) {
-        console.error("❌ Embedding lỗi hoặc thiếu dữ liệu:", arr);
+        console.error("❌ Embedding Error:", arr);
         return 0;
       }
       const [a, b] = arr;
@@ -157,8 +157,8 @@
     document.getElementById('rateBtn').onclick = async () => {
       const raw = document.getElementById('jokeInput').value.trim();
       const result = document.getElementById('result');
-      if(!raw){ result.innerHTML='❗ Nhập joke đi!'; return; }
-      result.innerHTML = '<div class="loading">Đang xử lý siêu phức tạp... ⏳</div>';
+      if(!raw){ result.innerHTML='Enter joke!'; return; }
+      result.innerHTML = '<div class="loading">Processing... </div>';
 
       const text = raw.toLowerCase();
       const [setup,punch] = splitJoke(text);
@@ -208,7 +208,7 @@
       else if(score>=80) spawnEmoji(['😂','🤣','😆'],20);
       else if(score>=50) spawnEmoji(['😄','🙂'],10);
 
-      let html=`<strong>Tổng điểm: ${score}/100</strong>
+      let html=`<strong>Score: ${score}/100</strong>
                 <div class="bar-container"><div class="bar" style="width:${score}%"></div></div>`;
       details.forEach(d=> html+=`<div class="metric">• ${d}</div>`);
       result.innerHTML=html;
