@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Joke Rater Ultra Full</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: #eee;
+      padding: 2rem;
+      overflow-x: hidden;
+    }
+    .container {
+      max-width: 720px;
+      margin: auto;
+      background: #1e1e1e;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    textarea {
+      width: 100%;
+      height: 180px;
+      padding: 1rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      background: #2e2e2e;
+      color: #fff;
+      resize: vertical;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.8rem 1.5rem;
+      font-size: 16px;
+      background: linear-gradient(45deg,#ff4081,#f50057);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    #result {
+      margin-top: 1.5rem;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .metric {
+      margin: 0.3rem 0;
+    }
+    .bar-container {
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .bar {
+      height: 8px;
+      background: #4caf50;
+    }
+    .loading {
+      font-style: italic;
+      color: #aaa;
+    }
+    .emoji {
+      position: fixed;
+      font-size: 24px;
+      animation: floatUp 2s ease-out forwards;
+      pointer-events: none;
+      z-index: 999;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-100px); opacity: 0; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.5.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Joke Rater Ultra Full (Siêu Phức Tạp)</h1>
+    <textarea id="jokeInput" placeholder="Nhập joke có punchline ngắn gọn..."></textarea>
+    <button id="rateBtn">Chấm Siêu Phức Tạp</button>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    let pretrainedUSE = null;
+    use.load().then(m => { pretrainedUSE = m; console.log('✅ USE model preloaded'); });
+
+    function spawnEmoji(emojis, count = 20) {
+      for (let i = 0; i < count; i++) {
+        const emoji = document.createElement('div');
+        emoji.className = 'emoji';
+        emoji.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        emoji.style.left = `${Math.random() * 100}%`;
+        emoji.style.top = `${50 + Math.random() * 30}%`;
+        document.body.appendChild(emoji);
+        setTimeout(() => emoji.remove(), 2000);
+      }
+    }
+
+    const sentimentMap = { funny:3,lol:2,love:3,laugh:2,surprise:1,dead:-2,kill:-3,sad:-2,hate:-3,dark:-1 };
+    const punMap = ["make up","impasta","charged","light bulb","egg","banana","pasta","ghost","grave","bark"];
+    const surpriseWords = ['but','however','unexpectedly','suddenly'];
+    const darkWords = ['dead','kill','grave','funeral'];
+    const commonBigrams = { 'why did':100,'knock knock':80,'what do':60,'walk into':50 };
+
+    function splitJoke(text) {
+      const parts = text.split(/[.!?]\s+/);
+      if(parts.length<2) return [text, ''];
+      const punch = parts.pop();
+      return [parts.join('. '), punch];
+    }
+
+    function lexicalDiversity(words) {
+      return new Set(words).size/words.length;
+    }
+
+    function readingEase(text) {
+      const sentences = text.split(/[.!?]+/).filter(s=>s).length||1;
+      const words = text.split(/\s+/).length||1;
+      const syllables = (text.match(/[aeiouy]{1,2}/g)||[]).length||1;
+      const ASL = words/sentences, ASW = syllables/words;
+      return 206.835 - 1.015*ASL - 84.6*ASW;
+    }
+
+    function bigramScore(text) {
+      const bi = text.match(/\b\w+\s+\w+\b/g)||[];
+      let sc=0;
+      bi.forEach(b=>{
+        sc += commonBigrams[b]? - (commonBigrams[b]/100)*10 : 5;
+      });
+      return Math.round(sc);
+    }
+
+    async function computeNovelty(setup,punch) {
+      const model = pretrainedUSE || await use.load();
+      const emb = await model.embed([setup,punch]);
+      const arr = await emb.array();
+      if (!arr || arr.length < 2) {
+        console.error("❌ Embedding lỗi hoặc thiếu dữ liệu:", arr);
+        return 0;
+      }
+      const [a, b] = arr;
+      let dot=0, magA=0, magB=0;
+      for(let i=0;i<a.length;i++){ dot+=a[i]*b[i]; magA+=a[i]**2; magB+=b[i]**2; }
+      magA=Math.sqrt(magA); magB=Math.sqrt(magB);
+      return 1 - dot/(magA*magB);
+    }
+
+    document.getElementById('rateBtn').onclick = async () => {
+      const raw = document.getElementById('jokeInput').value.trim();
+      const result = document.getElementById('result');
+      if(!raw){ result.innerHTML='❗ Nhập joke đi!'; return; }
+      result.innerHTML = '<div class="loading">Đang xử lý siêu phức tạp... ⏳</div>';
+
+      const text = raw.toLowerCase();
+      const [setup,punch] = splitJoke(text);
+      const words = text.split(/\s+/).filter(w=>w);
+      let score=0, details=[];
+
+      if(punch){ score+=15; details.push('Punchline exists: +15'); }
+      const div=lexicalDiversity(words), divScore=Math.round(div*20);
+      score+=divScore; details.push(`Lexical diversity: +${divScore}`);
+      const half=Math.floor(words.length/2);
+      const sScore=words.slice(0,half).reduce((s,w)=>s+(sentimentMap[w]||0),0);
+      const pScore=punch.split(/\s+/).reduce((s,w)=>s+(sentimentMap[w]||0),0);
+      if(Math.sign(sScore)!==Math.sign(pScore)){ score+=20; details.push('Sentiment contrast: +20'); }
+      let pc=0; punMap.forEach(p=> text.includes(p)&&pc++);
+      const punScore=Math.min(pc*10,30);
+      score+=punScore; details.push(`Pun count (${pc}): +${punScore}`);
+      let scCount=0; surpriseWords.forEach(w=> text.includes(w)&&scCount++);
+      const twistScore=Math.min(scCount*8,24);
+      score+=twistScore; details.push(`Twist keywords (${scCount}): +${twistScore}`);
+      let dc=0; darkWords.forEach(w=> text.includes(w)&&dc++);
+      const darkScore=Math.min(dc*5,15);
+      score+=darkScore; details.push(`Dark vibe (${dc}): +${darkScore}`);
+      const exCount=(text.match(/!/g)||[]).length, qCount=(text.match(/\?/g)||[]).length;
+      const puncScore=Math.min(exCount*3 + qCount*2,10);
+      score+=puncScore; details.push(`Punctuation (!,?): +${puncScore}`);
+      const ease=Math.max(0,Math.min(100,Math.round(readingEase(text))));
+      const easeScore=Math.floor((ease/100)*10);
+      score+=easeScore; details.push(`Readability: +${easeScore}`);
+      const bgScore=bigramScore(text);
+      score+=bgScore; details.push(`Bigram rarity: ${bgScore}`);
+      const novelty=await computeNovelty(setup,punch);
+      const novScore=Math.round(novelty*30);
+      score+=novScore; details.push(`Semantic novelty: +${novScore}`);
+      const lengths=words.map(w=>w.length);
+      const avg=lengths.reduce((a,b)=>a+b,0)/lengths.length;
+      const varLen=Math.sqrt(lengths.reduce((a,b)=>a+(b-avg)**2,0)/lengths.length);
+      const lenScore=Math.min(Math.round(varLen*5),10);
+      score+=lenScore; details.push(`Length variation: +${lenScore}`);
+      const calls=Number(sessionStorage.getItem('calls')||0);
+      const randBonus=Math.max(0,10-calls);
+      sessionStorage.setItem('calls',calls+1);
+      score+=randBonus; details.push(`Random bonus: +${randBonus}`);
+
+      score=Math.max(0,Math.min(100,Math.round(score)));
+
+      if(score>=95) spawnEmoji(['🎆','🎇','✨','💥','🎉'],30);
+      else if(score>=80) spawnEmoji(['😂','🤣','😆'],20);
+      else if(score>=50) spawnEmoji(['😄','🙂'],10);
+
+      let html=`<strong>Tổng điểm: ${score}/100</strong>
+                <div class="bar-container"><div class="bar" style="width:${score}%"></div></div>`;
+      details.forEach(d=> html+=`<div class="metric">• ${d}</div>`);
+      result.innerHTML=html;
+    };
+  </script>
+</body>
+</html>
